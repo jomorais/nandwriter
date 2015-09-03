@@ -244,7 +244,7 @@ if __name__ == '__main__':
             print '[ERRO] on formatting root partition'
             exit(0)
 
-        print '[EXEC] burning distro to nand'
+        print '[EXEC] burning distro to nand '
         if copy_distro_to_nand():
             print '[DONE] distro was successfully burned to nand flash'
         else:
