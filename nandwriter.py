@@ -66,6 +66,41 @@ def get_nand_sectors():
     return int(s[:end])
 
 
+def get_sdcard_partitions():
+    """
+    Detects sdcard partitions
+    :return sdcard partitions: array with sdcard partitions
+    """
+    s = commands.getoutput('ls /dev/mmcblk0p*')
+    if 'No such file or directory' in s:
+        return []
+    return s.splitlines()
+
+
+def find_boot_partition():
+    partitions = get_sdcard_partitions()
+    boot_directory = ''
+    for partition in partitions:
+        os.system('mount ' + str(partition) + '/media/mmc_boot')
+        if os.path.isfile('/media/mmc_boot/uImage') and os.path.isfile('/media/mmc_boot/script.bin'):
+            return '/media/mmc_boot'
+        elif os.path.isfile('/media/mmc_boot/boot/uImage') and os.path.isfile('/media/mmc_boot/boot/script.bin'):
+            return '/media/mmc_boot/boot'
+        os.system('umount /media/boot/')
+    return boot_directory
+
+
+def find_root_partition():
+    partitions = get_sdcard_partitions()
+    root_directory = ''
+    for partition in partitions:
+        os.system('mount ' + str(partition) + '/media/mmc_rootfs')
+        if os.path.isdir('/media/mmc_rootfs/etc/') and os.path.isdir('/media/mmc_rootfs/root/'):
+            return '/media/mmc_rootfs'
+        os.system('umount /media/mmc_rootfs/')
+    return root_directory
+
+
 def convert_to_mega_bytes(sectors):
     """
     Converts sectors to megabytes
@@ -146,12 +181,13 @@ def init_transfer():
     :return True | False:
     """
     os.system('mkdir -p /mnt')
-    os.system('mkdir -p /media/boot')
-    os.system('mkdir -p /media/rootfs')
-    os.system('mount /dev/nanda /media/boot/')
-    os.system('mount /dev/nandb /media/rootfs/')
-    os.system('mount /dev/mmcblk0p1 /mnt/')
-    os.system('rm -r /media/rootfs/*')
+    os.system('mkdir -p /media/mmc_boot')
+    os.system('mkdir -p /media/mmc_rootfs')
+    os.system('mkdir -p /media/nand_boot')
+    os.system('mkdir -p /media/nand_rootfs')
+    os.system('mount /dev/nanda /media/nand_boot/')
+    os.system('mount /dev/nandb /media/nand_rootfs/')
+    os.system('rm -r /media/nand_rootfs/*')
     return True
 
 
@@ -160,11 +196,15 @@ def copy_distro_to_nand():
     Copy kernel, script.bin and rootfs to nand
     :return True | False:
     """
-    os.system('tar -xf boot-files.tar -C /media/boot/')
-    os.system('cp -rv /mnt/boot/uImage /media/boot/')
-    os.system('cp -rv /mnt/boot/script.bin /media/boot/')
-    os.system('cp -rv /mnt/* /media/rootfs/')
-    return True
+    boot_dir = find_boot_partition()
+    root_dir = find_root_partition()
+    if boot_dir != '' and root_dir != '':
+        os.system('tar -xf boot-files.tar -C /media/nand_boot/')
+        os.system('cp -v ' + boot_dir + '/uImage /media/nand_boot/')
+        os.system('cp -v ' + boot_dir + '/script.bin /media/nand_boot/')
+        os.system('cp -rv ' + root_dir + '/* /media/nand_rootfs/')
+        return True
+    return False
 
 
 def finishing():
@@ -173,14 +213,15 @@ def finishing():
     :return True | False:
     """
     os.system('sync')
-    os.system('umount /media/boot/')
-    os.system('umount /media/rootfs/')
-    os.system('umount /mnt/')
+    os.system('umount /media/mmc_boot/')
+    os.system('umount /media/mmc_rootfs/')
+    os.system('umount /media/nand_boot/')
+    os.system('umount /media/nand_rootfs/')
     return True
 
 
 if __name__ == '__main__':
-    print 'nand-writer v0.0.2'
+    print 'nand-writer v0.0.3'
     if check_nand_device_driver() and check_dependences():
         nand_sectors = get_nand_sectors()
         nand_rootfs_partition_size = calc_root_partition_size()
